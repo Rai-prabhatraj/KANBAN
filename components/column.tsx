@@ -74,29 +74,29 @@ export default function Column({
   const headerColorClass = column.color || "bg-white dark:bg-gray-800"
 
   return (
-    <div className="shrink-0 w-80 flex flex-col kanban-column rounded-xl">
-      <div className={`p-4 flex justify-between items-center border-b border-border/50 rounded-t-xl ${headerColorClass}`}>
-        <h3 className="font-semibold text-sm text-foreground flex items-center">
+    <div className="shrink-0 w-72 flex flex-col bg-gray-50 dark:bg-gray-900 rounded-md shadow-sm">
+      <div className={`p-3 flex justify-between items-center border-b rounded-t-md ${headerColorClass}`}>
+        <h3 className="font-medium text-sm text-gray-700 dark:text-gray-200 flex items-center">
           {column.title}
-          <span className="ml-3 text-xs bg-primary/10 text-primary px-2.5 py-1 rounded-full font-medium">
+          <span className="ml-2 text-xs bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 px-2 py-0.5 rounded-full">
             {column.tasks.length}
           </span>
         </h3>
-        <div className="flex items-center space-x-1">
+        <div className="flex">
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-primary/10">
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                 <Palette className="h-4 w-4" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-64">
-              <div className="space-y-3">
-                <h4 className="font-medium text-sm">Column Color</h4>
+            <PopoverContent className="w-64 dark:bg-gray-800 dark:border-gray-700">
+              <div className="space-y-2">
+                <h4 className="font-medium text-sm dark:text-gray-200">Column Color</h4>
                 <div className="grid grid-cols-4 gap-2">
                   {COLUMN_COLORS.map((color) => (
                     <button
                       key={color.value}
-                      className={`h-8 w-full rounded-lg ${color.value} border border-border hover:scale-105 transition-transform shadow-sm`}
+                      className={`h-8 w-full rounded-md ${color.value} border dark:border-gray-700 hover:opacity-80 transition-opacity`}
                       onClick={() => handleColorChange(color.value)}
                       aria-label={`Set column color to ${color.name}`}
                     />
@@ -107,12 +107,12 @@ export default function Column({
           </Popover>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-destructive/10">
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={onDeleteColumn} className="text-destructive focus:text-destructive">
+              <DropdownMenuItem onClick={onDeleteColumn} className="text-red-600 dark:text-red-400">
                 <Trash2 className="mr-2 h-4 w-4" />
                 Delete Column
               </DropdownMenuItem>
@@ -123,16 +123,11 @@ export default function Column({
 
       <Droppable droppableId={column.id}>
         {(provided) => (
-          <div ref={provided.innerRef} {...provided.droppableProps} className="flex-1 p-4 overflow-y-auto space-y-3">
+          <div ref={provided.innerRef} {...provided.droppableProps} className="flex-1 p-2 overflow-y-auto">
             {column.tasks.map((task, index) => (
               <Draggable key={task.id} draggableId={task.id} index={index}>
-                {(provided, snapshot) => (
-                  <div 
-                    ref={provided.innerRef} 
-                    {...provided.draggableProps} 
-                    {...provided.dragHandleProps}
-                    className={`transition-transform duration-200 ${snapshot.isDragging ? 'rotate-2 scale-105' : ''}`}
-                  >
+                {(provided) => (
+                  <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}>
                     <TaskCard
                       task={task}
                       onClick={() => onTaskClick(task)}
@@ -145,8 +140,8 @@ export default function Column({
             {provided.placeholder}
 
             {isAddingTask ? (
-              <div className="kanban-card p-4 rounded-xl">
-                <Label htmlFor="task-title" className="text-sm font-medium text-foreground mb-2 block">
+              <div className="mt-2 p-3 bg-white dark:bg-gray-800 rounded-md shadow-sm border dark:border-gray-700">
+                <Label htmlFor="task-title" className="dark:text-gray-200">
                   Task Title
                 </Label>
                 <Input
@@ -154,17 +149,9 @@ export default function Column({
                   value={newTaskTitle}
                   onChange={(e) => setNewTaskTitle(e.target.value)}
                   placeholder="Enter task title"
-                  className="mb-3"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      handleAddTask()
-                    } else if (e.key === 'Escape') {
-                      setIsAddingTask(false)
-                    }
-                  }}
+                  className="mb-2 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200"
                 />
-                <Label htmlFor="task-description" className="text-sm font-medium text-foreground mb-2 block">
+                <Label htmlFor="task-description" className="dark:text-gray-200">
                   Description (optional)
                 </Label>
                 <Textarea
@@ -172,17 +159,18 @@ export default function Column({
                   value={newTaskDescription}
                   onChange={(e) => setNewTaskDescription(e.target.value)}
                   placeholder="Enter task description"
-                  className="mb-4"
+                  className="mb-2 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200"
                   rows={3}
                 />
-                <div className="flex gap-3">
-                  <Button size="sm" onClick={handleAddTask} className="flex-1">
-                    Add Task
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={handleAddTask}>
+                    Add
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => setIsAddingTask(false)}
+                    className="dark:border-gray-600 dark:text-gray-200"
                   >
                     Cancel
                   </Button>
@@ -190,18 +178,11 @@ export default function Column({
               </div>
             ) : (
               <Button
-                variant="outline"
-                className="w-full h-16 border-dashed border-2 hover:border-primary/50 hover:bg-primary/5 transition-all duration-200 group"
+                variant="ghost"
+                className="w-full mt-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 justify-start"
                 onClick={() => setIsAddingTask(true)}
               >
-                <div className="flex flex-col items-center space-y-2">
-                  <div className="w-6 h-6 rounded-full bg-primary/10 group-hover:bg-primary/20 transition-colors flex items-center justify-center">
-                    <Plus className="h-3 w-3 text-primary" />
-                  </div>
-                  <span className="text-xs font-medium text-muted-foreground group-hover:text-primary transition-colors">
-                    Add Task
-                  </span>
-                </div>
+                <Plus className="mr-2 h-4 w-4" /> Add Task
               </Button>
             )}
           </div>
