@@ -7,6 +7,8 @@ export interface Task {
   subtasks: Subtask[]
   customFields: CustomField[]
   createdAt: string
+  userId?: string
+  updatedAt?: string
 }
 
 export interface Subtask {
@@ -26,6 +28,9 @@ export interface Column {
   title: string
   tasks: Task[]
   color?: string
+  userId?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 // Add new Rule interfaces for automation
@@ -35,6 +40,9 @@ export interface Rule {
   condition: RuleCondition
   action: RuleAction
   enabled: boolean
+  userId?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface RuleCondition {

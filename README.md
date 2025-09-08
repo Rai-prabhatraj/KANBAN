@@ -1,25 +1,13 @@
-# 🚀 Modern Kanban Board
+#  Modern Kanban Board
 
 A beautiful, modern Kanban board built with Next.js, TypeScript, and Tailwind CSS. Features a fully functional theme system, drag-and-drop functionality, and automation rules.
 
-![Kanban Board](https://img.shields.io/badge/Next.js-15.2.4-black?style=for-the-badge&logo=next.js)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?style=for-the-badge&logo=typescript)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4.17-38B2AC?style=for-the-badge&logo=tailwind-css)
-
 ## Features
-
-### Modern Design
-- **Glass Morphism Effects**: Beautiful backdrop blur and transparency effects
-- **Gradient Accents**: Subtle gradients throughout the UI for visual depth
-- **Smooth Animations**: 200-300ms transitions for all interactive elements
-- **Custom Scrollbars**: Themed scrollbars that match the design system
-- **Responsive Design**: Optimized for all screen sizes
 
 ### Theme System
 - **Light/Dark/System Themes**: Full theme support with system preference detection
 - **Smooth Transitions**: No flash of unstyled content during theme changes
 - **Consistent Design Tokens**: Cohesive color palette across all components
-- **Hydration Safe**: Proper SSR/client-side rendering handling
 
 ### Kanban Functionality
 - **Drag & Drop**: Smooth drag-and-drop between columns using `@hello-pangea/dnd`
