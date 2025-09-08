@@ -258,20 +258,73 @@ export default function KanbanBoardFirebase() {
     const task = sourceColumn.tasks.find((t) => t.id === draggableId)
     if (!task) return
 
+    // Update local state immediately for better UX
+    const updatedTask = { ...task, status: destColumn.title }
+    
+    setColumns(prevColumns => {
+      const newColumns = [...prevColumns]
+      const sourceColIndex = newColumns.findIndex((col) => col.id === source.droppableId)
+      const destColIndex = newColumns.findIndex((col) => col.id === destination.droppableId)
+
+      // Remove task from source column
+      newColumns[sourceColIndex] = {
+        ...sourceColumn,
+        tasks: sourceColumn.tasks.filter((t) => t.id !== draggableId),
+      }
+
+      // Add task to destination column
+      newColumns[destColIndex] = {
+        ...destColumn,
+        tasks: [
+          ...destColumn.tasks.slice(0, destination.index),
+          updatedTask,
+          ...destColumn.tasks.slice(destination.index),
+        ],
+      }
+
+      return newColumns
+    })
+
+    // Update selected task if it's the one being moved
+    if (selectedTask && selectedTask.id === draggableId) {
+      setSelectedTask(updatedTask)
+    }
+
     try {
       await taskService.updateTask(task.id, { status: destColumn.title })
       
-      // Update selected task if it's the one being moved
-      if (selectedTask && selectedTask.id === draggableId) {
-        setSelectedTask({ ...task, status: destColumn.title })
-      }
-
       toast({
         title: "Task moved",
         description: `"${task.title}" moved to ${destColumn.title}`,
       })
     } catch (error) {
       console.error("Error moving task:", error)
+      
+      // Revert local state on error
+      setColumns(prevColumns => {
+        const newColumns = [...prevColumns]
+        const sourceColIndex = newColumns.findIndex((col) => col.id === source.droppableId)
+        const destColIndex = newColumns.findIndex((col) => col.id === destination.droppableId)
+
+        // Remove task from destination column
+        newColumns[destColIndex] = {
+          ...destColumn,
+          tasks: destColumn.tasks.filter((t) => t.id !== draggableId),
+        }
+
+        // Add task back to source column
+        newColumns[sourceColIndex] = {
+          ...sourceColumn,
+          tasks: [
+            ...sourceColumn.tasks.slice(0, source.index),
+            task,
+            ...sourceColumn.tasks.slice(source.index),
+          ],
+        }
+
+        return newColumns
+      })
+
       toast({
         title: "Error",
         description: "Failed to move task. Please try again.",
