@@ -52,29 +52,45 @@ export const taskService = {
   async getTasks(userId: string): Promise<Task[]> {
     const q = query(
       collection(db, TASKS_COLLECTION),
-      where('userId', '==', userId),
-      orderBy('createdAt', 'desc')
+      where('userId', '==', userId)
     )
     const querySnapshot = await getDocs(q)
-    return querySnapshot.docs.map((doc) => ({
+    const tasks = querySnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     })) as Task[]
+    
+    // Sort in memory to avoid composite index requirement
+    return tasks.sort((a, b) => {
+      const aTime = a.createdAt?.toDate?.() || new Date(a.createdAt || 0)
+      const bTime = b.createdAt?.toDate?.() || new Date(b.createdAt || 0)
+      return bTime.getTime() - aTime.getTime()
+    })
   },
 
   // Listen to real-time updates for tasks
-  subscribeToTasks(userId: string, callback: (tasks: Task[]) => void) {
+  subscribeToTasks(userId: string, callback: (tasks: Task[]) => void, onError?: (error: any) => void) {
     const q = query(
       collection(db, TASKS_COLLECTION),
-      where('userId', '==', userId),
-      orderBy('createdAt', 'desc')
+      where('userId', '==', userId)
     )
     return onSnapshot(q, (querySnapshot) => {
       const tasks = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as Task[]
-      callback(tasks)
+      
+      // Sort in memory to avoid composite index requirement
+      const sortedTasks = tasks.sort((a, b) => {
+        const aTime = a.createdAt?.toDate?.() || new Date(a.createdAt || 0)
+        const bTime = b.createdAt?.toDate?.() || new Date(b.createdAt || 0)
+        return bTime.getTime() - aTime.getTime()
+      })
+      
+      callback(sortedTasks)
+    }, (error) => {
+      console.error("Error in tasks snapshot:", error)
+      if (onError) onError(error)
     })
   },
 }
@@ -111,23 +127,28 @@ export const columnService = {
   async getColumns(userId: string): Promise<ColumnType[]> {
     const q = query(
       collection(db, COLUMNS_COLLECTION),
-      where('userId', '==', userId),
-      orderBy('createdAt', 'asc')
+      where('userId', '==', userId)
     )
     const querySnapshot = await getDocs(q)
-    return querySnapshot.docs.map((doc) => ({
+    const columns = querySnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
       tasks: [], // Tasks will be loaded separately
     })) as ColumnType[]
+    
+    // Sort in memory to avoid composite index requirement
+    return columns.sort((a, b) => {
+      const aTime = a.createdAt?.toDate?.() || new Date(a.createdAt || 0)
+      const bTime = b.createdAt?.toDate?.() || new Date(b.createdAt || 0)
+      return aTime.getTime() - bTime.getTime()
+    })
   },
 
   // Listen to real-time updates for columns
-  subscribeToColumns(userId: string, callback: (columns: ColumnType[]) => void) {
+  subscribeToColumns(userId: string, callback: (columns: ColumnType[]) => void, onError?: (error: any) => void) {
     const q = query(
       collection(db, COLUMNS_COLLECTION),
-      where('userId', '==', userId),
-      orderBy('createdAt', 'asc')
+      where('userId', '==', userId)
     )
     return onSnapshot(q, (querySnapshot) => {
       const columns = querySnapshot.docs.map((doc) => ({
@@ -135,7 +156,18 @@ export const columnService = {
         ...doc.data(),
         tasks: [], // Tasks will be loaded separately
       })) as ColumnType[]
-      callback(columns)
+      
+      // Sort in memory to avoid composite index requirement
+      const sortedColumns = columns.sort((a, b) => {
+        const aTime = a.createdAt?.toDate?.() || new Date(a.createdAt || 0)
+        const bTime = b.createdAt?.toDate?.() || new Date(b.createdAt || 0)
+        return aTime.getTime() - bTime.getTime()
+      })
+      
+      callback(sortedColumns)
+    }, (error) => {
+      console.error("Error in columns snapshot:", error)
+      if (onError) onError(error)
     })
   },
 }
@@ -172,29 +204,46 @@ export const ruleService = {
   async getRules(userId: string): Promise<Rule[]> {
     const q = query(
       collection(db, RULES_COLLECTION),
-      where('userId', '==', userId),
-      orderBy('createdAt', 'asc')
+      where('userId', '==', userId)
     )
     const querySnapshot = await getDocs(q)
-    return querySnapshot.docs.map((doc) => ({
+    const rules = querySnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     })) as Rule[]
+    
+    // Sort in memory to avoid composite index requirement
+    return rules.sort((a, b) => {
+      const aTime = a.createdAt?.toDate?.() || new Date(a.createdAt || 0)
+      const bTime = b.createdAt?.toDate?.() || new Date(b.createdAt || 0)
+      return aTime.getTime() - bTime.getTime()
+    })
   },
 
   // Listen to real-time updates for rules
-  subscribeToRules(userId: string, callback: (rules: Rule[]) => void) {
+  subscribeToRules(userId: string, callback: (rules: Rule[]) => void, onError?: (error: any) => void) {
     const q = query(
       collection(db, RULES_COLLECTION),
-      where('userId', '==', userId),
-      orderBy('createdAt', 'asc')
+      where('userId', '==', userId)
     )
     return onSnapshot(q, (querySnapshot) => {
       const rules = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as Rule[]
-      callback(rules)
+      
+      // Sort in memory to avoid composite index requirement
+      const sortedRules = rules.sort((a, b) => {
+        const aTime = a.createdAt?.toDate?.() || new Date(a.createdAt || 0)
+        const bTime = b.createdAt?.toDate?.() || new Date(b.createdAt || 0)
+        return aTime.getTime() - bTime.getTime()
+      })
+      
+      callback(sortedRules)
+    }, (error) => {
+      console.error("Error in rules snapshot:", error)
+      if (onError) onError(error)
     })
   },
 }
+

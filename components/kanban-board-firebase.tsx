@@ -39,6 +39,8 @@ export default function KanbanBoardFirebase() {
         // Get user's columns
         const userColumns = await columnService.getColumns(currentUser.uid)
         
+        let finalColumns = []
+        
         if (userColumns.length === 0) {
           // Create default columns for new user
           const defaultColumns = [
@@ -69,6 +71,7 @@ export default function KanbanBoardFirebase() {
               tasks: [],
             })
           }
+          finalColumns = createdColumns
           setColumns(createdColumns)
         } else {
           // Load existing columns
@@ -82,44 +85,50 @@ export default function KanbanBoardFirebase() {
               }
             })
           )
+          finalColumns = columnsWithTasks
           setColumns(columnsWithTasks)
         }
 
         // Get user's rules
         const userRules = await ruleService.getRules(currentUser.uid)
         if (userRules.length === 0) {
-          // Create default rules for new user
-          const defaultRules = [
-            {
-              name: "Move overdue tasks to Blocked",
-              condition: {
-                type: "due-date" as const,
-                operator: "is-overdue" as const,
+          // Create default rules for new user using actual column IDs
+          const blockedColumn = finalColumns.find(col => col.title === "Blocked")
+          const completedColumn = finalColumns.find(col => col.title === "Completed")
+          
+          if (blockedColumn && completedColumn) {
+            const defaultRules = [
+              {
+                name: "Move overdue tasks to Blocked",
+                condition: {
+                  type: "due-date" as const,
+                  operator: "is-overdue" as const,
+                },
+                action: {
+                  type: "move-to-column" as const,
+                  targetColumnId: blockedColumn.id,
+                },
+                enabled: true,
               },
-              action: {
-                type: "move-to-column" as const,
-                targetColumnId: userColumns.length > 0 ? userColumns[2]?.id : "column-3",
+              {
+                name: "Move completed tasks when all subtasks done",
+                condition: {
+                  type: "subtasks-completed" as const,
+                  operator: "all-completed" as const,
+                },
+                action: {
+                  type: "move-to-column" as const,
+                  targetColumnId: completedColumn.id,
+                },
+                enabled: true,
               },
-              enabled: true,
-            },
-            {
-              name: "Move completed tasks when all subtasks done",
-              condition: {
-                type: "subtasks-completed" as const,
-                operator: "all-completed" as const,
-              },
-              action: {
-                type: "move-to-column" as const,
-                targetColumnId: userColumns.length > 0 ? userColumns[3]?.id : "column-4",
-              },
-              enabled: true,
-            },
-          ]
+            ]
 
-          for (const rule of defaultRules) {
-            await ruleService.createRule(currentUser.uid, rule)
+            for (const rule of defaultRules) {
+              await ruleService.createRule(currentUser.uid, rule)
+            }
+            setRules(defaultRules.map(rule => ({ ...rule, id: generateId() })))
           }
-          setRules(defaultRules.map(rule => ({ ...rule, id: generateId() })))
         } else {
           setRules(userRules)
         }
@@ -142,6 +151,8 @@ export default function KanbanBoardFirebase() {
   useEffect(() => {
     if (!currentUser) return
 
+    let hasInitialized = false
+
     // Listen to tasks changes
     const unsubscribeTasks = taskService.subscribeToTasks(currentUser.uid, (tasks) => {
       setColumns(prevColumns => 
@@ -150,6 +161,29 @@ export default function KanbanBoardFirebase() {
           tasks: tasks.filter(task => task.status === column.title)
         }))
       )
+    }, (error) => {
+      console.error("Error in tasks listener:", error)
+      // If this is the first error and we haven't initialized yet, try to load data manually
+      if (!hasInitialized) {
+        hasInitialized = true
+        // Fallback to manual data loading
+        const loadDataManually = async () => {
+          try {
+            const userColumns = await columnService.getColumns(currentUser.uid)
+            const userTasks = await taskService.getTasks(currentUser.uid)
+            
+            const columnsWithTasks = userColumns.map(column => ({
+              ...column,
+              tasks: userTasks.filter(task => task.status === column.title)
+            }))
+            
+            setColumns(columnsWithTasks)
+          } catch (fallbackError) {
+            console.error("Fallback data loading also failed:", fallbackError)
+          }
+        }
+        loadDataManually()
+      }
     })
 
     // Listen to columns changes
@@ -164,11 +198,15 @@ export default function KanbanBoardFirebase() {
         })
         return updatedColumns
       })
+    }, (error) => {
+      console.error("Error in columns listener:", error)
     })
 
     // Listen to rules changes
     const unsubscribeRules = ruleService.subscribeToRules(currentUser.uid, (newRules) => {
       setRules(newRules)
+    }, (error) => {
+      console.error("Error in rules listener:", error)
     })
 
     return () => {
