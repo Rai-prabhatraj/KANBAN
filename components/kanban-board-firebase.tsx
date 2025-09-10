@@ -27,6 +27,49 @@ export default function KanbanBoardFirebase() {
   const [rules, setRules] = useState<Rule[]>([])
   const [activeTab, setActiveTab] = useState("board")
   const [loading, setLoading] = useState(true)
+  const [isDragging, setIsDragging] = useState(false)
+
+  // Cleanup function to remove orphaned tasks
+  const cleanupOrphanedTasks = async (columns: ColumnType[]) => {
+    if (!currentUser) return
+
+    try {
+      // Get all tasks from Firebase
+      const firebaseTasks = await taskService.getTasks(currentUser.uid)
+      const firebaseTaskIds = new Set(firebaseTasks.map(task => task.id))
+
+      // Find orphaned tasks in local state
+      const orphanedTasks: string[] = []
+      columns.forEach(column => {
+        column.tasks.forEach(task => {
+          if (!firebaseTaskIds.has(task.id)) {
+            orphanedTasks.push(task.id)
+          }
+        })
+      })
+
+      // Remove orphaned tasks from local state
+      if (orphanedTasks.length > 0) {
+        console.warn(`Found ${orphanedTasks.length} orphaned tasks, removing from UI:`, orphanedTasks)
+        setColumns(prevColumns => 
+          prevColumns.map(column => ({
+            ...column,
+            tasks: column.tasks.filter(task => !orphanedTasks.includes(task.id))
+          }))
+        )
+
+        // Clear selected task if it's orphaned
+        setSelectedTask(prevSelected => {
+          if (prevSelected && orphanedTasks.includes(prevSelected.id)) {
+            return null
+          }
+          return prevSelected
+        })
+      }
+    } catch (error) {
+      console.error("Error cleaning up orphaned tasks:", error)
+    }
+  }
 
   // Initialize with default columns if user has no columns
   useEffect(() => {
@@ -132,6 +175,9 @@ export default function KanbanBoardFirebase() {
         } else {
           setRules(userRules)
         }
+
+        // Clean up any orphaned tasks that might exist in local state
+        await cleanupOrphanedTasks(finalColumns)
       } catch (error) {
         console.error("Error initializing user data:", error)
         toast({
@@ -155,12 +201,34 @@ export default function KanbanBoardFirebase() {
 
     // Listen to tasks changes
     const unsubscribeTasks = taskService.subscribeToTasks(currentUser.uid, (tasks) => {
-      setColumns(prevColumns => 
-        prevColumns.map(column => ({
+      // Skip real-time updates during drag operations to prevent conflicts
+      if (isDragging) {
+        return
+      }
+
+      setColumns(prevColumns => {
+        // Create a map of tasks by status for efficient lookup
+        const tasksByStatus = tasks.reduce((acc, task) => {
+          if (!acc[task.status]) {
+            acc[task.status] = []
+          }
+          acc[task.status].push(task)
+          return acc
+        }, {} as Record<string, Task[]>)
+
+        return prevColumns.map(column => ({
           ...column,
-          tasks: tasks.filter(task => task.status === column.title)
+          tasks: tasksByStatus[column.title] || []
         }))
-      )
+      })
+      
+      // Clear selected task if it no longer exists
+      setSelectedTask(prevSelected => {
+        if (prevSelected && !tasks.find(task => task.id === prevSelected.id)) {
+          return null
+        }
+        return prevSelected
+      })
     }, (error) => {
       console.error("Error in tasks listener:", error)
       // If this is the first error and we haven't initialized yet, try to load data manually
@@ -209,12 +277,20 @@ export default function KanbanBoardFirebase() {
       console.error("Error in rules listener:", error)
     })
 
+    // Set up periodic cleanup of orphaned tasks
+    const cleanupInterval = setInterval(() => {
+      if (columns.length > 0) {
+        cleanupOrphanedTasks(columns)
+      }
+    }, 30000) // Run every 30 seconds
+
     return () => {
       unsubscribeTasks()
       unsubscribeColumns()
       unsubscribeRules()
+      clearInterval(cleanupInterval)
     }
-  }, [currentUser])
+  }, [currentUser, columns, isDragging])
 
   // Process automation rules
   useEffect(() => {
@@ -281,20 +357,45 @@ export default function KanbanBoardFirebase() {
     }
   }, [columns, rules, toast])
 
+  const handleDragStart = () => {
+    setIsDragging(true)
+    
+    // Safety timeout to reset dragging state if something goes wrong
+    setTimeout(() => {
+      setIsDragging(false)
+    }, 10000) // 10 second timeout
+  }
+
+  const handleDragUpdate = () => {
+    // Keep dragging state active during drag
+  }
+
   const handleDragEnd = async (result: DropResult) => {
     const { destination, source, draggableId } = result
 
     if (!destination || (destination.droppableId === source.droppableId && destination.index === source.index)) {
+      setIsDragging(false)
       return
     }
 
     const sourceColumn = columns.find((col) => col.id === source.droppableId)
     const destColumn = columns.find((col) => col.id === destination.droppableId)
 
-    if (!sourceColumn || !destColumn) return
+    if (!sourceColumn || !destColumn) {
+      setIsDragging(false)
+      return
+    }
 
     const task = sourceColumn.tasks.find((t) => t.id === draggableId)
-    if (!task) return
+    if (!task) {
+      setIsDragging(false)
+      return
+    }
+
+    // Dragging state is already set in handleDragStart
+
+    // Store original state for potential rollback
+    const originalColumns = [...columns]
 
     // Update local state immediately for better UX
     const updatedTask = { ...task, status: destColumn.title }
@@ -329,6 +430,32 @@ export default function KanbanBoardFirebase() {
     }
 
     try {
+      // Check if task exists before updating
+      const taskExists = await taskService.getTaskById(task.id)
+      if (!taskExists) {
+        console.warn(`Task with id ${task.id} not found in database, removing from UI`)
+        
+        // Remove the task from all columns since it doesn't exist in Firebase
+        setColumns(prevColumns => 
+          prevColumns.map(column => ({
+            ...column,
+            tasks: column.tasks.filter(t => t.id !== task.id)
+          }))
+        )
+        
+        // Clear selected task if it's the one being removed
+        if (selectedTask && selectedTask.id === task.id) {
+          setSelectedTask(null)
+        }
+        
+        toast({
+          title: "Task removed",
+          description: "Task was removed as it no longer exists in the database",
+          variant: "destructive",
+        })
+        return
+      }
+
       await taskService.updateTask(task.id, { status: destColumn.title })
       
       toast({
@@ -339,56 +466,25 @@ export default function KanbanBoardFirebase() {
       console.error("Error moving task:", error)
       
       // Revert local state on error
-      setColumns(prevColumns => {
-        const newColumns = [...prevColumns]
-        const sourceColIndex = newColumns.findIndex((col) => col.id === source.droppableId)
-        const destColIndex = newColumns.findIndex((col) => col.id === destination.droppableId)
-
-        // Remove task from destination column
-        newColumns[destColIndex] = {
-          ...destColumn,
-          tasks: destColumn.tasks.filter((t) => t.id !== draggableId),
-        }
-
-        // Add task back to source column
-        newColumns[sourceColIndex] = {
-          ...sourceColumn,
-          tasks: [
-            ...sourceColumn.tasks.slice(0, source.index),
-            task,
-            ...sourceColumn.tasks.slice(source.index),
-          ],
-        }
-
-        return newColumns
-      })
+      setColumns(originalColumns)
 
       toast({
         title: "Error",
         description: "Failed to move task. Please try again.",
         variant: "destructive",
       })
+    } finally {
+      // Always reset dragging state
+      setIsDragging(false)
     }
   }
 
-  const addTask = async (columnId: string, task: Task) => {
+  const addTask = async (columnId: string, task: Task | Omit<Task, 'id'>) => {
     if (!currentUser) return
 
     try {
-      const taskId = await taskService.createTask(currentUser.uid, task)
-      const newTask = { ...task, id: taskId }
-      
-      setColumns(prevColumns =>
-        prevColumns.map((column) => {
-          if (column.id === columnId) {
-            return {
-              ...column,
-              tasks: [...column.tasks, newTask],
-            }
-          }
-          return column
-        })
-      )
+      // Create task in Firestore - the real-time listener will update the UI
+      await taskService.createTask(currentUser.uid, task)
       
       toast({
         title: "Task created",
@@ -469,20 +565,8 @@ export default function KanbanBoardFirebase() {
 
     if (targetColumnId) {
       try {
-        const newTaskId = await taskService.createTask(currentUser.uid, duplicatedTask)
-        const newTask = { ...duplicatedTask, id: newTaskId }
-        
-        setColumns(prevColumns =>
-          prevColumns.map((column) => {
-            if (column.id === targetColumnId) {
-              return {
-                ...column,
-                tasks: [...column.tasks, newTask],
-              }
-            }
-            return column
-          })
-        )
+        // Create task in Firestore - the real-time listener will update the UI
+        await taskService.createTask(currentUser.uid, duplicatedTask)
         
         toast({
           title: "Task duplicated",
@@ -510,19 +594,12 @@ export default function KanbanBoardFirebase() {
     }
 
     try {
-      const columnId = await columnService.createColumn(currentUser.uid, {
+      // Create column in Firestore - the real-time listener will update the UI
+      await columnService.createColumn(currentUser.uid, {
         title: newColumnTitle,
         color: "bg-gray-50 dark:bg-gray-900/30",
       })
 
-      const newColumn: ColumnType = {
-        id: columnId,
-        title: newColumnTitle,
-        tasks: [],
-        color: "bg-gray-50 dark:bg-gray-900/30",
-      }
-
-      setColumns(prevColumns => [...prevColumns, newColumn])
       setNewColumnTitle("")
       setIsAddingColumn(false)
       
@@ -674,7 +751,11 @@ export default function KanbanBoardFirebase() {
 
   // Board content for the "board" tab
   const renderBoardContent = () => (
-    <DragDropContext onDragEnd={handleDragEnd}>
+    <DragDropContext 
+      onDragStart={handleDragStart}
+      onDragUpdate={handleDragUpdate}
+      onDragEnd={handleDragEnd}
+    >
       <div className="flex gap-4 h-full">
         {columns.map((column) => (
           <Column

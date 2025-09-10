@@ -27,7 +27,7 @@ const COLUMN_COLORS = [
 
 interface ColumnProps {
   column: ColumnType
-  onAddTask: (columnId: string, task: Task) => void
+  onAddTask: (columnId: string, task: Task | Omit<Task, 'id'>) => void
   onTaskClick: (task: Task) => void
   onDeleteColumn: () => void
   onUpdateColumn: (columnId: string, updates: Partial<ColumnType>) => void
@@ -49,8 +49,7 @@ export default function Column({
   const handleAddTask = () => {
     if (!newTaskTitle.trim()) return
 
-    const newTask: Task = {
-      id: `task-${generateId()}`,
+    const newTask: Omit<Task, 'id'> = {
       title: newTaskTitle,
       description: newTaskDescription,
       status: column.title,
@@ -125,7 +124,7 @@ export default function Column({
         {(provided) => (
           <div ref={provided.innerRef} {...provided.droppableProps} className="flex-1 p-2 overflow-y-auto">
             {column.tasks.map((task, index) => (
-              <Draggable key={task.id} draggableId={task.id} index={index}>
+              <Draggable key={`${column.id}-${task.id}`} draggableId={task.id} index={index}>
                 {(provided) => (
                   <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}>
                     <TaskCard

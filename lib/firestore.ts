@@ -36,6 +36,13 @@ export const taskService = {
   // Update an existing task
   async updateTask(taskId: string, updates: Partial<Task>): Promise<void> {
     const taskRef = doc(db, TASKS_COLLECTION, taskId)
+    
+    // Check if document exists before updating
+    const taskSnap = await getDoc(taskRef)
+    if (!taskSnap.exists()) {
+      throw new Error(`Task with id ${taskId} not found`)
+    }
+    
     await updateDoc(taskRef, {
       ...updates,
       updatedAt: serverTimestamp(),
@@ -46,6 +53,20 @@ export const taskService = {
   async deleteTask(taskId: string): Promise<void> {
     const taskRef = doc(db, TASKS_COLLECTION, taskId)
     await deleteDoc(taskRef)
+  },
+
+  // Get a specific task by ID
+  async getTaskById(taskId: string): Promise<Task | null> {
+    const taskRef = doc(db, TASKS_COLLECTION, taskId)
+    const taskSnap = await getDoc(taskRef)
+    
+    if (taskSnap.exists()) {
+      return {
+        id: taskSnap.id,
+        ...taskSnap.data(),
+      } as Task
+    }
+    return null
   },
 
   // Get all tasks for a user
